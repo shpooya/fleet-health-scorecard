@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fleet Health Scorecard</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --text: #17212b;
+      --muted: #5b6775;
+      --accent: #1463ff;
+      --good: #1f9d55;
+      --warn: #e29b19;
+      --bad: #d64545;
+      --border: #dbe3ee;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    h1 { margin-bottom: .25rem; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 1rem 0 1.25rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      padding: .6rem .9rem;
+      border-radius: .5rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover { border-color: var(--accent); }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      padding: 1rem;
+      box-shadow: 0 3px 10px rgba(0,0,0,.04);
+    }
+
+    .vehicle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: .7rem;
+      gap: .5rem;
+    }
+
+    .vehicle-name { font-size: 1.1rem; font-weight: 700; }
+    .overall { font-weight: 700; }
+
+    .overall.good { color: var(--good); }
+    .overall.warn { color: var(--warn); }
+    .overall.bad { color: var(--bad); }
+
+    .metric, .score-row {
+      display: flex;
+      justify-content: space-between;
+      margin: .2rem 0;
+      font-size: .95rem;
+    }
+
+    .label { color: var(--muted); }
+
+    .section-title {
+      margin-top: .8rem;
+      margin-bottom: .3rem;
+      font-size: .9rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .03em;
+    }
+
+    .legend {
+      margin-top: 1rem;
+      font-size: .9rem;
+      color: var(--muted);
+    }
+
+    code {
+      background: #eef3ff;
+      border: 1px solid #dbe6ff;
+      border-radius: .3rem;
+      padding: .05rem .3rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Fleet Health Scorecard</h1>
+    <p class="subtitle">Mock data demo for learning how a telematics scorecard app can be built.</p>
+
+    <div class="toolbar">
+      <div id="sortLabel">Sorted: Best First</div>
+      <button id="sortToggle">Switch to Worst First</button>
+    </div>
+
+    <div id="cards" class="cards"></div>
+
+    <p class="legend">
+      Tip: Open this file directly in a browser. To edit sample fleet data, update the
+      <code>fleetData</code> array in the JavaScript section.
+    </p>
+  </div>
+
+  <script>
+    // ----------------------------------------------------------
+    // 1) SAMPLE MOCK DATA
+    // ----------------------------------------------------------
+    // This is fake data made for learning only (no API calls).
+    // You can add/remove vehicles or adjust values here.
+    const fleetData = [
+      {
+        name: "Truck 12",
+        milesDriven: 1420,
+        engineHours: 68,
+        idleHours: 8,
+        fuelUsed: 190,
+        maintenanceStatus: "Good" // Good, Due Soon, Overdue
+      },
+      {
+        name: "Van 7",
+        milesDriven: 830,
+        engineHours: 54,
+        idleHours: 15,
+        fuelUsed: 130,
+        maintenanceStatus: "Due Soon"
+      },
+      {
+        name: "Truck 3",
+        milesDriven: 1580,
+        engineHours: 75,
+        idleHours: 5,
+        fuelUsed: 205,
+        maintenanceStatus: "Good"
+      },
+      {
+        name: "Service Car 4",
+        milesDriven: 640,
+        engineHours: 49,
+        idleHours: 18,
+        fuelUsed: 110,
+        maintenanceStatus: "Overdue"
+      },
+      {
+        name: "Van 15",
+        milesDriven: 980,
+        engineHours: 57,
+        idleHours: 9,
+        fuelUsed: 140,
+        maintenanceStatus: "Due Soon"
+      }
+    ];
+
+    // Track current sort mode. By requirement, start with best-to-worst.
+    let sortMode = "best";
+
+    // Utility: keep score in 0..100 range.
+    const clampScore = (value) => Math.max(0, Math.min(100, value));
+
+    // ----------------------------------------------------------
+    // 2) SCORE CALCULATIONS
+    // ----------------------------------------------------------
+    function calculateScores(vehicle) {
+      // Utilization score:
+      // We compare miles per engine hour against a simple target.
+      const milesPerHour = vehicle.milesDriven / Math.max(vehicle.engineHours, 1);
+      const utilizationTarget = 20; // demo target for miles/hour
+      const utilizationScore = clampScore((milesPerHour / utilizationTarget) * 100);
+
+      // Idle score:
+      // Less idling is better. We convert idle ratio into a score.
+      const idleRatio = vehicle.idleHours / Math.max(vehicle.engineHours, 1);
+      const idleScore = clampScore(100 - (idleRatio * 100));
+
+      // Fuel efficiency score:
+      // We compare miles per gallon to a target MPG.
+      const mpg = vehicle.milesDriven / Math.max(vehicle.fuelUsed, 1);
+      const mpgTarget = 8; // demo target MPG (for mixed fleet learning example)
+      const fuelEfficiencyScore = clampScore((mpg / mpgTarget) * 100);
+
+      // Maintenance readiness score:
+      // We convert status text into a score for easy weighting.
+      const maintenanceMap = {
+        "Good": 100,
+        "Due Soon": 70,
+        "Overdue": 30
+      };
+      const maintenanceReadinessScore = maintenanceMap[vehicle.maintenanceStatus] ?? 50;
+
+      // Overall score (weighted):
+      // - Utilization: 30%
+      // - Idle: 25%
+      // - Fuel efficiency: 25%
+      // - Maintenance: 20%
+      const overallScore = clampScore(
+        utilizationScore * 0.30 +
+        idleScore * 0.25 +
+        fuelEfficiencyScore * 0.25 +
+        maintenanceReadinessScore * 0.20
+      );
+
+      return {
+        utilizationScore,
+        idleScore,
+        fuelEfficiencyScore,
+        maintenanceReadinessScore,
+        overallScore
+      };
+    }
+
+    function scoreClass(score) {
+      if (score >= 80) return "good";
+      if (score >= 60) return "warn";
+      return "bad";
+    }
+
+    // ----------------------------------------------------------
+    // 3) RENDERING
+    // ----------------------------------------------------------
+    function render() {
+      const cardsEl = document.getElementById("cards");
+      const sortLabelEl = document.getElementById("sortLabel");
+      const sortBtnEl = document.getElementById("sortToggle");
+
+      // Build a new list with computed scores so we can sort/display it.
+      const enriched = fleetData.map(vehicle => ({
+        ...vehicle,
+        scores: calculateScores(vehicle)
+      }));
+
+      // Sort depending on selected mode.
+      enriched.sort((a, b) => {
+        return sortMode === "best"
+          ? b.scores.overallScore - a.scores.overallScore
+          : a.scores.overallScore - b.scores.overallScore;
+      });
+
+      sortLabelEl.textContent = sortMode === "best" ? "Sorted: Best First" : "Sorted: Worst First";
+      sortBtnEl.textContent = sortMode === "best" ? "Switch to Worst First" : "Switch to Best First";
+
+      // Draw cards.
+      cardsEl.innerHTML = enriched.map(v => {
+        const overallRounded = Math.round(v.scores.overallScore);
+        return `
+          <article class="card">
+            <div class="vehicle-header">
+              <div class="vehicle-name">${v.name}</div>
+              <div class="overall ${scoreClass(overallRounded)}">Overall: ${overallRounded}/100</div>
+            </div>
+
+            <div class="section-title">Vehicle Metrics</div>
+            <div class="metric"><span class="label">Miles driven</span><span>${v.milesDriven}</span></div>
+            <div class="metric"><span class="label">Engine hours</span><span>${v.engineHours}</span></div>
+            <div class="metric"><span class="label">Idle hours</span><span>${v.idleHours}</span></div>
+            <div class="metric"><span class="label">Fuel used (gal)</span><span>${v.fuelUsed}</span></div>
+            <div class="metric"><span class="label">Maintenance status</span><span>${v.maintenanceStatus}</span></div>
+
+            <div class="section-title">Score Breakdown</div>
+            <div class="score-row"><span class="label">Utilization</span><span>${Math.round(v.scores.utilizationScore)}</span></div>
+            <div class="score-row"><span class="label">Idle</span><span>${Math.round(v.scores.idleScore)}</span></div>
+            <div class="score-row"><span class="label">Fuel efficiency</span><span>${Math.round(v.scores.fuelEfficiencyScore)}</span></div>
+            <div class="score-row"><span class="label">Maintenance readiness</span><span>${Math.round(v.scores.maintenanceReadinessScore)}</span></div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    // Toggle sort order when button is clicked.
+    document.getElementById("sortToggle").addEventListener("click", () => {
+      sortMode = sortMode === "best" ? "worst" : "best";
+      render();
+    });
+
+    // First draw.
+    render();
+  </script>
+</body>
+</html>
