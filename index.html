@@ -126,12 +126,16 @@
     <div class="toolbar">
       <div id="sortLabel">Sorted: Best First</div>
       <button id="sortToggle">Switch to Worst First</button>
+      <label for="csvUpload" style="display:inline-flex;align-items:center;gap:.5rem;font-size:.9rem;color:var(--muted);">
+        Upload CSV
+        <input id="csvUpload" type="file" accept=".csv" />
+      </label>
     </div>
 
     <div id="cards" class="cards"></div>
 
     <p class="legend">
-      Tip: Open this file directly in a browser. To edit sample fleet data, update the
+      Tip: Open this file directly in a browser. You can either upload a CSV file or edit the
       <code>fleetData</code> array in the JavaScript section.
     </p>
   </div>
@@ -142,7 +146,7 @@
     // ----------------------------------------------------------
     // This is fake data made for learning only (no API calls).
     // You can add/remove vehicles or adjust values here.
-    const fleetData = [
+    let fleetData = [
       {
         name: "Truck 12",
         milesDriven: 1420,
@@ -298,6 +302,80 @@
         `;
       }).join("");
     }
+
+
+
+    // ----------------------------------------------------------
+    // 4) CSV UPLOAD (OPTIONAL)
+    // ----------------------------------------------------------
+    // This lets non-developers load sample data from a CSV file
+    // instead of editing JavaScript directly.
+    //
+    // Expected columns (header row):
+    // name,milesDriven,engineHours,idleHours,fuelUsed,maintenanceStatus
+    function parseCsv(text) {
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (lines.length < 2) return [];
+
+      const headers = lines[0].split(',').map(h => h.trim());
+      const required = [
+        'name',
+        'milesDriven',
+        'engineHours',
+        'idleHours',
+        'fuelUsed',
+        'maintenanceStatus'
+      ];
+
+      // Basic header check so users get clear feedback.
+      const missing = required.filter(col => !headers.includes(col));
+      if (missing.length) {
+        throw new Error(`Missing required CSV columns: ${missing.join(', ')}`);
+      }
+
+      const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
+
+      return lines.slice(1).map((line, rowNum) => {
+        const cols = line.split(',').map(c => c.trim());
+        const row = {
+          name: cols[idx.name] || `Vehicle ${rowNum + 1}`,
+          milesDriven: Number(cols[idx.milesDriven]),
+          engineHours: Number(cols[idx.engineHours]),
+          idleHours: Number(cols[idx.idleHours]),
+          fuelUsed: Number(cols[idx.fuelUsed]),
+          maintenanceStatus: cols[idx.maintenanceStatus] || 'Due Soon'
+        };
+
+        // Fallbacks for invalid numeric values keep demo resilient.
+        row.milesDriven = Number.isFinite(row.milesDriven) ? row.milesDriven : 0;
+        row.engineHours = Number.isFinite(row.engineHours) ? row.engineHours : 1;
+        row.idleHours = Number.isFinite(row.idleHours) ? row.idleHours : 0;
+        row.fuelUsed = Number.isFinite(row.fuelUsed) ? row.fuelUsed : 1;
+
+        return row;
+      });
+    }
+
+    document.getElementById('csvUpload').addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = parseCsv(String(reader.result || ''));
+          if (!parsed.length) {
+            alert('CSV has no vehicle rows. Add at least one data row.');
+            return;
+          }
+          fleetData = parsed;
+          render();
+        } catch (err) {
+          alert(`Could not parse CSV. ${err.message}`);
+        }
+      };
+      reader.readAsText(file);
+    });
 
     // Toggle sort order when button is clicked.
     document.getElementById("sortToggle").addEventListener("click", () => {
