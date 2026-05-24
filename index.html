@@ -104,6 +104,33 @@
       letter-spacing: .03em;
     }
 
+     .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: .75rem;
+      margin-bottom: 1rem;
+    }
+
+    .summary-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .6rem;
+      padding: .75rem .9rem;
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: .85rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .summary-value {
+      margin-top: .25rem;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
     .legend {
       margin-top: 1rem;
       font-size: .9rem;
@@ -131,6 +158,8 @@
         <input id="csvUpload" type="file" accept=".csv" />
       </label>
     </div>
+
+    <section id="summary" class="summary-grid"></section>
 
     <div id="cards" class="cards"></div>
 
@@ -257,6 +286,7 @@
     // ----------------------------------------------------------
     function render() {
       const cardsEl = document.getElementById("cards");
+      const summaryEl = document.getElementById("summary");
       const sortLabelEl = document.getElementById("sortLabel");
       const sortBtnEl = document.getElementById("sortToggle");
 
@@ -272,6 +302,33 @@
           ? b.scores.overallScore - a.scores.overallScore
           : a.scores.overallScore - b.scores.overallScore;
       });
+
+
+
+      // Build top summary values for a quick fleet view.
+      const avgScore = enriched.reduce((sum, v) => sum + v.scores.overallScore, 0) / Math.max(enriched.length, 1);
+      const bestVehicle = [...enriched].sort((a, b) => b.scores.overallScore - a.scores.overallScore)[0];
+      const worstVehicle = [...enriched].sort((a, b) => a.scores.overallScore - b.scores.overallScore)[0];
+      const totalIdleHours = enriched.reduce((sum, v) => sum + v.idleHours, 0);
+
+      summaryEl.innerHTML = `
+        <div class="summary-card">
+          <div class="summary-label">Average Score</div>
+          <div class="summary-value">${Math.round(avgScore)}/100</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Best Vehicle</div>
+          <div class="summary-value">${bestVehicle?.name ?? 'N/A'}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Worst Vehicle</div>
+          <div class="summary-value">${worstVehicle?.name ?? 'N/A'}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Total Idle Hours</div>
+          <div class="summary-value">${totalIdleHours}</div>
+        </div>
+      `;
 
       sortLabelEl.textContent = sortMode === "best" ? "Sorted: Best First" : "Sorted: Worst First";
       sortBtnEl.textContent = sortMode === "best" ? "Switch to Worst First" : "Switch to Best First";
